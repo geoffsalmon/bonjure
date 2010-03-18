@@ -154,8 +154,9 @@ consumes the bytes in the given buffer."
                                  )
                          rdlen (bit-and 0xFFFF (int (.getShort buff)))
                          rdbuf (slice-off buff rdlen)
+                         type (:type hdr)
                          ]
-                     (case (:type hdr)
+                     (condp = type
                            12           ; PTR
                            (assoc hdr :rd (read-labels rdbuf))
 
