@@ -157,6 +157,39 @@ filled callin the Java put* methods"
     (is (= -1 (take-long)))
     (is (= (- b64 1) (take-ulong)))))
 
+
+(deftest test-bit-pack
+  (is (= 0x120428 (pack-bits 4 1 4 2 4 0 4 4 8 0x28)))
+
+  (is (thrown? Exception
+               (pack-bits 4 1 4 -5 4)) "field without value")
+  
+  (is (thrown? Exception
+               (pack-bits 4 1 4 -5 4 2)) "negative values")
+
+  (is (thrown? Exception
+               (pack-bits 4 1 0 0 4 2)) "zero bit lengths")
+
+  (is (thrown? Exception
+               (pack-bits 4 1 -10 5 4 2)) "negative bit lengths")
+
+  (is (thrown? Exception
+               (pack-bits 4 1 4 16 4 2)) "insufficient bit lengths")
+  )
+
+(deftest test-bit-unpack
+  (is (= [0 0 0x12 0x34 0x5] (unpack-bits 0x12345 3 9 8 8 4)))
+  
+  (is (= [0x12 0x5] (unpack-bits 0x12345 8 -8 4)) "Skip bits")
+  
+  (is (= [0x12 0x34 0x5] (unpack-bits 0x12345 0 0 8 8 0 4)) "Weird 0 bit length. Should this be an error instead?")
+
+  )
+
+
+
+
+
 ;(use-fixtures :each read-fix-1)
 
 
