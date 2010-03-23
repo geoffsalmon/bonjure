@@ -15,9 +15,57 @@
 (def b32 (expt 2 32))
 (def b63 (expt 2 63))
 (def b64 (expt 2 64))
-;(def pos-int 4)
 
-(deftest test-take-byte
+; choose values that have a different value for each byte
+(def b (byte 0x1))
+(def s 0x302)
+(def i 0x7060504)
+(def l 0x0f0e0d0c0b0a0908)
+
+(deftest test-packing
+  "Check that buffers filled with pack are identical to those
+filled callin the Java put* methods"
+  (is (=
+       (doto (ByteBuffer/allocate 100)
+         (.put b)
+         (.putShort s)
+         (.putInt i)
+         (.putLong l)
+         (.flip)
+         )
+       (.flip (pack (byte-buffer 100) "bsil" b s i l))))
+  )
+
+(deftest test-unpacking
+  "Check that unpack is the inverse of pack"
+  (let [vals [b s i l]
+        fmt "bsil"
+        buff (.flip (apply pack (byte-buffer 100) fmt vals))]
+    (is (=
+         vals
+         (unpack buff fmt)
+         )))
+  )
+
+(deftest test-signed-unsigned
+  (let [buff
+        (.flip
+         (apply pack (byte-buffer 100)
+               "bbssiill"
+               (mapcat #(list -1 (dec (expt 2 %))) [8 16 32 64])
+               ))]
+
+        (is (= (repeat 8 -1)
+               (unpack buff "bbssiill")))
+
+        (.position buff 0)
+        
+        (is (= (mapcat #(repeat 2 (dec (expt 2 %))) [8 16 32 64])
+               (unpack buff "BBSSIILL")))
+        )
+  )
+
+(deftest test-take-bytes
   (with-buffer
     (.flip (reduce (fn [buff b] (.put buff (byte b)))
                    (ByteBuffer/allocate 100)
