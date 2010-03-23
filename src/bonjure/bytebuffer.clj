@@ -1,3 +1,6 @@
+(ns bonjure.bytebuffer
+  (:import (java.nio ByteBuffer ByteOrder))
+  )
 
 (def *byte-buffer* nil)
 

@@ -2,7 +2,7 @@
   (:import (java.net MulticastSocket InetAddress DatagramPacket))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.charset Charset))
-  (:load "bytebuffer")
+  (:use bonjure.bytebuffer)
   )
 
 ; Attempts to implement a continuous multicast dns querier as

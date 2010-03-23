@@ -1,8 +1,7 @@
-(ns bonjure.core-test
-  (:use [bonjure.core] :reload-all)
+(ns bonjure.bytebuffer-test
+  (:use [bonjure.bytebuffer] :reload-all)
   (:use [clojure.test])
   (:use [clojure.contrib math])
-;  [:require [clojure.contrib [math :as math]]] 
   (:import (java.nio ByteBuffer ByteOrder)))
 
 ; choose values that have a different value for each byte
@@ -185,16 +184,6 @@ filled callin the Java put* methods"
   (is (= [0x12 0x34 0x5] (unpack-bits 0x12345 0 0 8 8 0 4)) "Weird 0 bit length. Should this be an error instead?")
 
   )
-
-
-
-
-
-;(use-fixtures :each read-fix-1)
-
-
-
-;(set! *load-tests* false)
 
 
 
