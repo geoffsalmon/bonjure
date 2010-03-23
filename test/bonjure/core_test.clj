@@ -5,17 +5,6 @@
 ;  [:require [clojure.contrib [math :as math]]] 
   (:import (java.nio ByteBuffer ByteOrder)))
 
-
-(def pos-int (expt 2 20))
-
-
-(def b15 (expt 2 15))
-(def b16 (expt 2 16))
-(def b31 (expt 2 31))
-(def b32 (expt 2 32))
-(def b63 (expt 2 63))
-(def b64 (expt 2 64))
-
 ; choose values that have a different value for each byte
 (def b (byte 0x1))
 (def s 0x302)
@@ -48,22 +37,47 @@ filled callin the Java put* methods"
   )
 
 (deftest test-signed-unsigned
-  (let [buff
+  (let [max-unsigned (map #(dec (expt 2 %)) [8 16 32 64])
+        mid-unsigned (map #(expt 2 %) [7 15 31 63])
+        min-signed (map - mid-unsigned)
+        
+        buff
         (.flip
          (apply pack (byte-buffer 100)
-               "bbssiill"
-               (mapcat #(list -1 (dec (expt 2 %))) [8 16 32 64])
+                "bsilbsilbsilbsil"
+                
+                (concat
+                 (repeat 4 -1)
+                 max-unsigned
+                 mid-unsigned
+                 min-signed
+                 )
                ))]
 
-        (is (= (repeat 8 -1)
-               (unpack buff "bbssiill")))
+    ; unpack as signed variables
+    (is (= (repeat 8 -1)
+           (unpack buff "bsilbsil")))
+    
+    (is (= (apply concat (repeat 2 min-signed))
+           (unpack buff "bsilbsil")))
 
-        (.position buff 0)
-        
-        (is (= (mapcat #(repeat 2 (dec (expt 2 %))) [8 16 32 64])
-               (unpack buff "BBSSIILL")))
-        )
+    (.position buff 0) ; reread buffer from start
+
+    ; unpack as unsigned variables
+    (is (= (apply concat (repeat 2 max-unsigned))
+           (unpack buff "BSILBSIL")))
+    
+    (is (= (apply concat (repeat 2 mid-unsigned))
+           (unpack buff "BSILBSIL")))
+    )
   )
+
+(def b15 (expt 2 15))
+(def b16 (expt 2 16))
+(def b31 (expt 2 31))
+(def b32 (expt 2 32))
+(def b63 (expt 2 63))
+(def b64 (expt 2 64))
 
 (deftest test-take-bytes
   (with-buffer
