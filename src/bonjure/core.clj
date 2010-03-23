@@ -2,6 +2,7 @@
   (:import (java.net MulticastSocket InetAddress DatagramPacket))
   (:import (java.nio ByteBuffer ByteOrder))
   (:import (java.nio.charset Charset))
+  (:load "bytebuffer")
   )
 
 ; Attempts to implement a continuous multicast dns querier as
@@ -213,4 +214,4 @@ consumes the bytes in the given buffer."
 ;  (println "Remaining:" (.remaining buffer))
 ;)
 
-(go)
+;(go)
