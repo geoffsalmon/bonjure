@@ -23,29 +23,35 @@
 
 (defn add-query [buffer name]
   (reduce (fn [_ comp]
-            (println (.length comp) comp)
-            (.put buffer (byte (.length comp)))
-            (.put buffer (.getBytes comp))
+            (let [len (.length comp)]
+              (when (or (> len 63) (< len 1))
+                (throw (Exception. (str "Component \"" comp "\" of name \"" name "\" must be length 1-63")))
+                )
+              
+              (println len comp)
+              (put-short buffer len)
+              (.put buffer (.getBytes comp)))
             nil)
           nil (seq (.split name "\\.")))
   
   (doto buffer
-    (.put (byte 0))                    ; add final null byte
-    (.putShort 12)                    ; QTYPE 12=PTR, 255=Request all records
-    (.putShort 1))                     ; QCLASS 1=IN Internet
+    (put-byte 0)              ; add final null byte
+    (put-short 12)            ; QTYPE 12=PTR, 255=Request all records
+    (put-short 1))            ; QCLASS 1=IN Internet
   )
 
 (defn create-msg-data []
-  (doto (ByteBuffer/allocate 100)
+  (doto (byte-buffer 100)
     (.order ByteOrder/BIG_ENDIAN)
-    (.putShort 12)                      ; ID
-    (.putShort 0)                       ; flags
-    (.putShort 1)                       ; QDCOUNT
-    (.putShort 0)                       ; ANCOUNT
-    (.putShort 0)                       ; NSCOUNT
-    (.putShort 0)                       ; ARCOUNT
-
-    (add-query "_services._dns-sd._udp.local")
+    (pack "ssssss"
+          12      ; ID
+          0       ; flags
+          1       ; QDCOUNT
+          0 0 0   ; ANCOUNT NSCOUNT ARCOUNT
+          )
+        (add-query "_services._dns-sdreallylongcomponentthatisfartoolong_dns-sdreallylongcomponentthatisfartoolong._udp.local")
+                                        ;    (add-query "_services._dns-sd._udp.local")
+    
                                         ;(add-query "_daap._udp.local")
     (.flip)
     )
@@ -88,21 +94,6 @@
       )
   )
 
-(defn slice-off [buff len]
-  "Create a new bytebuffer by slicing off the first len bytes. Also
-consumes the bytes in the given buffer."
-;  (println "slice" len "bytes from" (.remaining buff) "remaining")
-  (when (> len (.remaining buff))
-    (println "slice is too big")
-    )
-;  (when (> len (.remaining buff))
-;    (println (.get buff) " " (.get buff) " " (.get buff) " " (.get buff) " " (.get buff) ))
-  (let [rdbuf (-> buff (.slice) (.limit len))]
-    (.position buff (+ (.position buff) len)) ; advance the actual buffer
-    rdbuf
-    )
-  ) 
-  
 (defn read-label [buff length]
   (let [viewbuf (slice-off buff length)
         decoder (.newDecoder utf8-charset)]
@@ -135,34 +126,35 @@ consumes the bytes in the given buffer."
 
 (defn process-question [buff n]
 ;  (println "process-question")
-  (doall (take n (repeatedly
-                  #(-> {}
-                       (assoc :name (read-labels buff))
-                       (assoc :type (.getShort buff))
-                       (assoc :class (.getShort buff))))))
+  (doall
+   (take n
+         (repeatedly
+          #(hash-map
+            :name (read-labels buff)
+            :type (take-ushort buff)
+            :class (take-ushort buff)))))
   )
 
 
 
 (defn process-rrs [buff n]
 ;  (println "process-rrs" n)
-  (doall (take n (repeatedly
-                  #(let [hdr (-> {}
-                                 (assoc :name (read-labels buff))
-                                 (assoc :type (.getShort buff))
-                                 (assoc :class (.getShort buff))
-                                 (assoc :ttl (.getInt buff))
-                                 )
-                         rdlen (bit-and 0xFFFF (int (.getShort buff)))
-                         rdbuf (slice-off buff rdlen)
-                         type (:type hdr)
-                         ]
-                     (condp = type
-                           12           ; PTR
-                           (assoc hdr :rd (read-labels rdbuf))
-
-                           hdr          ; default
-                           ))
+  (doall
+   (take n
+         (repeatedly
+          #(let [hdr {:name (read-labels buff)
+                      :type (take-ushort buff)
+                      :class (take-ushort buff)
+                      :ttl (take-int buff)}
+                 rdlen (take-ushort buff)
+                 rdbuf (slice-off buff rdlen)
+                 ]
+             (case (:type hdr)
+                   12           ; PTR
+                   (assoc hdr :rd (read-labels rdbuf))
+                   
+                   hdr          ; default
+                   ))
                   )
                )))
 
@@ -179,7 +171,9 @@ consumes the bytes in the given buffer."
 
 (defn process-pkt [buff]
   
-  (let [pinfo (zipmap [:id :flags :qdcount :ancount :nscount :arcount] (take 6 (repeatedly #(bit-and 0xFFFF (.getShort buff)))))]
+  (let [pinfo (zipmap
+               [:id :flags :qdcount :ancount :nscount :arcount]
+               (unpack "SSSSSS" buff))]
     (-> pinfo
         (assoc :flags (decode-flags (:flags pinfo)))
         ((partial process-pkt-body buff)))
@@ -214,4 +208,4 @@ consumes the bytes in the given buffer."
 ;  (println "Remaining:" (.remaining buffer))
 ;)
 
-;(go)
+(go)
