@@ -25,6 +25,25 @@ filled callin the Java put* methods"
        (.flip (pack (byte-buffer 100) "bsil" b s i l))))
   )
 
+(deftest test-packing-error
+  (is (thrown? Exception
+               (pack (byte-buffer 100) "x" 1)))
+
+  (is (thrown? Exception
+               (pack (byte-buffer 100) "bb" 1)))
+
+  (is (thrown? Exception
+               (pack (byte-buffer 100) "b" 1 1)))
+  )
+
+(deftest test-unpacking-error
+  (let [buff (.flip (pack (byte-buffer 100) "i" 1))]
+    (is (thrown? Exception
+                 (unpack buff "x")))
+    
+    )
+  )
+
 (deftest test-unpacking
   "Check that unpack is the inverse of pack"
   (let [vals [b s i l]

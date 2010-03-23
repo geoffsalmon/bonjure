@@ -117,11 +117,14 @@ consumes the bytes in the given buffer."
         \s (put-short buff val)
         \i (put-int buff val)
         \l (put-long buff val)
+        (throw (IllegalArgumentException. (str "Unknown format symbol \"" fmt \")))
         ))
 
 (defn pack
   [buff fmt & vals]
-;  (println "pack" fmt vals)
+                                        ;  (println "pack" fmt vals)
+  (when-not (= (count fmt) (count vals))
+    (throw (IllegalArgumentException. "pack error. Number of format symbols must match number of values.")))
   (doall (map #(pack-one buff %1 %2) fmt vals))
   buff
   )
@@ -137,6 +140,7 @@ consumes the bytes in the given buffer."
         \I (take-uint buff)
         \l (take-long buff)
         \L (take-ulong buff)
+        (throw (IllegalArgumentException. (str "Unknown format symbol \"" fmt \")))
         ))
 
 (defn unpack

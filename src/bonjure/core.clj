@@ -49,7 +49,7 @@
           1       ; QDCOUNT
           0 0 0   ; ANCOUNT NSCOUNT ARCOUNT
           )
-        (add-query "_services._dns-sdreallylongcomponentthatisfartoolong_dns-sdreallylongcomponentthatisfartoolong._udp.local")
+        (add-query "_services._dns-sd._udp.local")
                                         ;    (add-query "_services._dns-sd._udp.local")
     
                                         ;(add-query "_daap._udp.local")
@@ -208,4 +208,4 @@
 ;  (println "Remaining:" (.remaining buffer))
 ;)
 
-(go)
+;(go)
