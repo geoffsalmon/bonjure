@@ -97,64 +97,56 @@ filled callin the Java put* methods"
 (def b63 (expt 2 63))
 (def b64 (expt 2 64))
 
+(defn- pack-flip [fmt & vars]
+  (.flip (apply pack (byte-buffer 100) fmt vars))
+  )
+
 (deftest test-take-bytes
-  (with-buffer
-    (.flip (reduce (fn [buff b] (.put buff (byte b)))
-                   (ByteBuffer/allocate 100)
-                   [0 0 -128 -128 -1 -1 ]))
-    
-    (is (= 0 (take-byte)))
-    (is (= 0 (take-ubyte)))
+  (let [buff (pack-flip "bbbbbb" 0 0 -128 -128 -1 -1)]
+    (is (= 0 (take-byte buff)))
+    (is (= 0 (take-ubyte buff)))
   
-    (is (= -128 (take-byte)))
-    (is (= 128 (take-ubyte)))
+    (is (= -128 (take-byte buff)))
+    (is (= 128 (take-ubyte buff)))
   
-    (is (= -1 (take-byte)))
-    (is (= 255 (take-ubyte)))))
+    (is (= -1 (take-byte buff)))
+    (is (= 255 (take-ubyte buff)))))
 
 (deftest test-take-short
-  (with-buffer
-    (.flip (reduce (fn [buff b] (.putShort buff (short b)))
-                   (ByteBuffer/allocate 100)
-                   [0 0 (- b15) (- b15) -1 -1 ]))    
-    (is (= 0 (take-short)))
-    (is (= 0 (take-ushort)))
+  (let [buff (pack-flip "ssssss" 0 0 (- b15) (- b15) -1 -1)]
+
+    (is (= 0 (take-short buff)))
+    (is (= 0 (take-ushort buff)))
   
-    (is (= (- b15) (take-short)))
-    (is (= b15 (take-ushort)))
+    (is (= (- b15) (take-short buff)))
+    (is (= b15 (take-ushort buff)))
   
-    (is (= -1 (take-short)))
-    (is (= (- b16 1) (take-ushort)))))
+    (is (= -1 (take-short buff)))
+    (is (= (- b16 1) (take-ushort buff)))))
 
 (deftest test-take-int
-  (with-buffer
-    (.flip (reduce (fn [buff b] (.putInt buff (int b)))
-                   (ByteBuffer/allocate 100)
-                   [0 0 (- b31) (- b31) -1 -1 ]))
+  (let [buff (pack-flip "iiiiii" 0 0 (- b31) (- b31) -1 -1)]
     
-    (is (= 0 (take-int)))
-    (is (= 0 (take-uint)))
+    (is (= 0 (take-int buff)))
+    (is (= 0 (take-uint buff)))
   
-    (is (= (- b31) (take-int)))
-    (is (=  b31 (take-uint)))
+    (is (= (- b31) (take-int buff)))
+    (is (=  b31 (take-uint buff)))
   
-    (is (= -1 (take-int)))
-    (is (= (- b32 1) (take-uint)))))
+    (is (= -1 (take-int buff)))
+    (is (= (- b32 1) (take-uint buff)))))
 
 (deftest test-take-long
-  (with-buffer
-    (.flip (reduce (fn [buff b] (.putLong buff (long b)))
-                   (ByteBuffer/allocate 100)
-                   [0 0 (- b63) (- b63) -1 -1 ]))
+  (let [buff (pack-flip "llllll" 0 0 (- b63) (- b63) -1 -1)]
     
-    (is (= 0 (take-long)))
-    (is (= 0 (take-ulong)))
+    (is (= 0 (take-long buff)))
+    (is (= 0 (take-ulong buff)))
   
-    (is (= (- b63) (take-long)))
-    (is (= b63 (take-ulong)))
+    (is (= (- b63) (take-long buff)))
+    (is (= b63 (take-ulong buff)))
   
-    (is (= -1 (take-long)))
-    (is (= (- b64 1) (take-ulong)))))
+    (is (= -1 (take-long buff)))
+    (is (= (- b64 1) (take-ulong buff)))))
 
 
 (deftest test-bit-pack

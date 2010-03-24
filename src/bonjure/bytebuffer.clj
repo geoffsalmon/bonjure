@@ -16,7 +16,7 @@
   ([val]
      (put-byte *byte-buffer* val))
   ([buff val]
-;     (println "put-byte" val (class val))
+     ;(println "put-byte" val (class val) (.byteValue))
      (.put buff (.byteValue val)))
   )
 
