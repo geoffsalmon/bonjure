@@ -14,11 +14,6 @@
 ; DNS-SD http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt
 
 
-(def group-ip (InetAddress/getByName "224.0.0.251"))
-;"224.0.0.251"
-(def group-port 5353)
-;5353
-
 (def utf8-charset (Charset/forName "UTF-8"))
 
 (defn add-query [buffer name]
@@ -63,28 +58,6 @@
     pkt))
 
 
-(defn send-packet [] 
-  (let [sock (MulticastSocket. group-port)]
-    
-    (doto sock
-      (.joinGroup group-ip)
-      (.send (create-msg group-ip group-port))
-      (.leaveGroup group-ip))))
-
-
-(defn listen-once [sock]
-  (let [pkt (DatagramPacket. (byte-array 1500) 1500)]
-    (println "Block on receive")
-    (.receive sock pkt)
-    pkt))
-
-(defn listen-many [sock event-fn]
-  (loop [] (event-fn (listen-once sock)) (recur)))
-
-(defn start-listen [sock event-fn]
-  (.joinGroup sock group-ip)  
-  (.start (Thread. (partial listen-many sock event-fn))))
-  
 (defn decode-flags [flags]
   (-> {}
       (assoc :qr (bit-test flags 15))
@@ -100,7 +73,6 @@
     (.toString (.decode decoder viewbuf))
     )
   )
-
 
 (defn read-labels
   ([buff] (read-labels buff []))
@@ -180,32 +152,3 @@
     )
   )
 
-(defn got-pkt [pkt]
-  (println "received packet of size" (.getLength pkt))
-  ( println "pkt:" (process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt))))
-  ) 
-
-
-(defn go []
-  (let [sock (MulticastSocket. group-port)]
-    (start-listen sock got-pkt)
-    (dotimes [i 1]
-      (println "Send msg")
-      (.send sock (create-msg group-ip group-port))
-      (Thread/sleep 1000)
-      )))
-                                        ;  (doto sock
-                                        ;    (.joinGroup group)
-                                        ;    (.send (create-msg group group-port))
-                                        ;    (.leaveGroup group)))
-
-    
-                                        ;(go)
-
-;(let [buffer (ByteBuffer/allocate 100)]
-;  (add-query buffer "foo.m")
-;  (.flip buffer)
-;  (println "Remaining:" (.remaining buffer))
-;)
-
-;(go)
