@@ -16,40 +16,44 @@
 
 (def utf8-charset (Charset/forName "UTF-8"))
 
-(defn add-query [buffer name]
-  (reduce (fn [_ comp]
-            (let [len (.length comp)]
-              (when (or (> len 63) (< len 1))
-                (throw (Exception. (str "Component \"" comp "\" of name \"" name "\" must be length 1-63")))
-                )
-              
-              (println len comp)
-              (put-short buffer len)
-              (.put buffer (.getBytes comp)))
-            nil)
-          nil (seq (.split name "\\.")))
-  
-  (doto buffer
-    (put-byte 0)              ; add final null byte
-    (put-short 12)            ; QTYPE 12=PTR, 255=Request all records
-    (put-short 1))            ; QCLASS 1=IN Internet
+(defn add-domain-name [buff name]
+  (doseq [comp (.split name "\\.")] 
+    (let [len (count comp)]
+      (when (or (> len 63) (< len 1))
+        (throw (Exception. (str "Component \"" comp "\" of name \"" name "\" must be length 1-63")))
+        )
+      ;(println len comp)
+      (put-byte buff len)
+      (.put buff (.getBytes comp)))
+    )
+  (put-byte buff 0)                     ; add final null byte
+  )
+
+(defn add-query [buff name]
+  (add-domain-name buff name)
+  (put-short buff 12)          ; QTYPE 12=PTR, 255=Request all records
+  (put-short buff 1)           ; QCLASS 1=IN Internet
+  )
+
+(defn create-query-msg [id name & names]
+  (println id name names (cons name names))
+  (let [buff (byte-buffer 100)]
+    (.order buff ByteOrder/BIG_ENDIAN)
+    (pack buff "ssssss"
+          id                            ; ID
+          0                             ; flags
+          (inc (count names))           ; QDCOUNT
+          0 0 0                         ; ANCOUNT NSCOUNT ARCOUNT
+          )
+    (doseq [n (cons name names)] (add-query buff n))
+    (.flip buff)
+    )
   )
 
 (defn create-msg-data []
-  (doto (byte-buffer 100)
-    (.order ByteOrder/BIG_ENDIAN)
-    (pack "ssssss"
-          12      ; ID
-          0       ; flags
-          1       ; QDCOUNT
-          0 0 0   ; ANCOUNT NSCOUNT ARCOUNT
-          )
-        (add-query "_services._dns-sd._udp.local")
-                                        ;    (add-query "_services._dns-sd._udp.local")
-    
-                                        ;(add-query "_daap._udp.local")
-    (.flip)
-    )
+  (create-query-msg 16 "_services._dns-sd._udp.local"
+                    ;"_daap._udp.local"
+                    )
   )
 
 (defn create-msg [ip port]
@@ -67,6 +71,14 @@
       )
   )
 
+(defn hex-byte [x]
+  (let [s (.toUpperCase (.toString (bigint x) 16))]
+    (if (= 1 (count s))
+      (str "0" s)
+      s
+      ))
+  )
+
 (defn read-label [buff length]
   (let [viewbuf (slice-off buff length)
         decoder (.newDecoder utf8-charset)]
@@ -74,26 +86,49 @@
     )
   )
 
+                                        ;(defn foo [] (case 1 1 (recur)))
+
+(def *label-cache*)
+
 (defn read-labels
   ([buff] (read-labels buff []))
   ([buff labels]
-     (let [num (bit-and 0xFF (.get buff))]
-                                        ;     (println "read label num" num)
-       (if (zero? num) (do
-                         (println "Read labels" labels)
-                         labels)
-           (if (== 0xC0 (bit-and 0xC0 num)) ; is a pointer
-             (let [index (bit-or (bit-shift-left (bit-and 0x3F num) 8) (.get buff))
-                   dupbuff (.position (.duplicate buff) index)]
-               (do
-                 (println "Is pointer to " labels " index:" index)
-                 (recur dupbuff labels)))
-             (let [label (read-label buff num)]
-                                        ;            (println "Got label" label)
-               (recur buff (conj labels label))
-               )
-             ))
-       ))
+     (let [num (take-ubyte buff)]
+       (println "read label num" (hex-byte num))
+       
+       (if (zero? num)
+        (do
+          (println "Read labels" labels)
+          labels)
+
+        (condp = (bit-and 3 (bit-shift-right num 6))
+          0 ; is start of new label
+          
+          (do (println "start of new label" num)
+              (let [label (read-label buff num)]
+                (println "Got label" label)
+                (swap! *label-cache* assoc (.position buff) label)
+                (recur buff (conj labels label))))
+              
+          3 ; is a pointer
+          (do
+            (println "found pointer")
+            (let [index (bit-or (bit-shift-left (bit-and 0x3F num) 8) (take-ubyte buff))
+                  ;dupbuff (.position (.duplicate buff) index)
+                  ]
+              (do
+                (println "Is pointer to " labels " index:" index buff)
+                                        ;(recur dupbuff labels)
+                (conj labels "POINTER")
+                )))
+          
+          2 (println "Unsupported label byte" num)
+          1 (println "Unsupported label byte" num)
+          
+          )
+        )
+       )
+     )
   )
 
 (defn process-question [buff n]
@@ -108,9 +143,8 @@
   )
 
 
-
 (defn process-rrs [buff n]
-;  (println "process-rrs" n)
+  (println "process-rrs" n)
   (doall
    (take n
          (repeatedly
@@ -121,6 +155,9 @@
                  rdlen (take-ushort buff)
                  rdbuf (slice-off buff rdlen)
                  ]
+             (println "rdlen: " rdlen)
+             ;(doseq [x (take rdlen (repeatedly (fn [] (take-ubyte rdbuf))))] (print (hex-byte x) ""))
+             ;(println "")
              (case (:type hdr)
                    12           ; PTR
                    (assoc hdr :rd (read-labels rdbuf))
@@ -138,17 +175,21 @@
         (assoc :an (process-rrs buff (:ancount pinfo)))
         (assoc :ns (process-rrs buff (:nscount pinfo)))
         (assoc :ar (process-rrs buff (:arcount pinfo))))
-  ;  )
+    ;)
   )
 
 (defn process-pkt [buff]
-  
-  (let [pinfo (zipmap
-               [:id :flags :qdcount :ancount :nscount :arcount]
-               (unpack "SSSSSS" buff))]
-    (-> pinfo
-        (assoc :flags (decode-flags (:flags pinfo)))
-        ((partial process-pkt-body buff)))
-    )
+
+  (binding [*label-cache* (atom {})]
+      (let [pinfo (zipmap
+                   [:id :flags :qdcount :ancount :nscount :arcount]
+                   (unpack buff "SSSSSS"))]
+
+        (-> pinfo
+            (assoc :flags (decode-flags (:flags pinfo)))
+            ((partial process-pkt-body buff)))
+        )
+      (println "label-cache" @*label-cache*)
+      )
   )
 

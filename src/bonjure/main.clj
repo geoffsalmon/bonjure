@@ -1,5 +1,5 @@
 (ns bonjure.main
-  (:import (java.net MulticastSocket InetAddress DatagramPacket))
+  (:import (java.net MulticastSocket InetAddress DatagramPacket SocketTimeoutException))
   (:import (java.nio ByteBuffer ByteOrder))
   (:use [bonjure bytebuffer])
   (:require [bonjure.core :as core]) 
@@ -22,7 +22,7 @@
 
 (defn listen-once [sock]
   (let [pkt (DatagramPacket. (byte-array 1500) 1500)]
-    (println "Block on receive")
+    (println "Calling receive")
     (.receive sock pkt)
     pkt))
 
@@ -39,16 +39,20 @@
   ( println "pkt:" (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt))))
   ) 
 
-
-
 (defn go []
   (let [sock (MulticastSocket. group-port)]
-    ;(start-listen sock bonjure.core/got-pkt)
-    (dotimes [i 1]
+    (.setSoTimeout sock 2000)
+;    (dotimes [i 1]
       (println "Send msg")
       (.send sock (bonjure.core/create-msg group-ip group-port))
       ;(Thread/sleep 1000)
-      )))
+;      )
+      (try
+       (.joinGroup sock group-ip)
+       (got-pkt (listen-once sock))
+       (catch SocketTimeoutException e (println "Timeout " e)))
+;    (start-listen sock got-pkt)
+    ))
 
 (defn -main
   [& args]
