@@ -27,11 +27,21 @@
     pkt))
 
 (defn listen-many [sock event-fn]
-  (loop [] (event-fn (listen-once sock)) (recur)))
+  (try
+   (loop [] (event-fn (listen-once sock)) (recur))
+   (catch SocketTimeoutException e (println "Timeout " e)))
+  )
 
 (defn start-listen [sock event-fn]
-  (.joinGroup sock group-ip)
-  (.start (Thread. (partial listen-many sock event-fn))))
+  (let [out *out*
+        err *err*] 
+    (.start (Thread. #(binding
+                          ; bind *out* and *err* to be the same as the
+                          ; calling thread so that output appears in
+                          ; the slime repl buffer
+                          [*out* out *err* err]
+                       (println "Running in thread") (listen-many sock event-fn)))))
+  )
 
 (defn got-pkt [pkt]
   (println "received packet of size" (.getLength pkt))
@@ -40,17 +50,14 @@
 
 (defn go []
   (let [sock (MulticastSocket. group-port)]
+    ;(.setLoopbackMode sock true)
     (.setSoTimeout sock 1000)
-    ;(start-listen sock got-pkt)
     (println "Send msg")
     (.send sock (bonjure.core/create-msg group-ip group-port))
-    ;(Thread/sleep 1000)
-
-      (try
-       (.joinGroup sock group-ip)
-       (got-pkt (listen-once sock))
-       (catch SocketTimeoutException e (println "Timeout " e)))
     
+    (.joinGroup sock group-ip)
+    (listen-many sock got-pkt)
+    ;(start-listen sock got-pkt)
     ))
 
 (defn -main
