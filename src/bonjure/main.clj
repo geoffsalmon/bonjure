@@ -30,28 +30,27 @@
   (loop [] (event-fn (listen-once sock)) (recur)))
 
 (defn start-listen [sock event-fn]
-  (.joinGroup sock group-ip)  
+  (.joinGroup sock group-ip)
   (.start (Thread. (partial listen-many sock event-fn))))
-
 
 (defn got-pkt [pkt]
   (println "received packet of size" (.getLength pkt))
-  ( println "pkt:" (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt))))
+  (println "pkt:" (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt))))
   ) 
 
 (defn go []
   (let [sock (MulticastSocket. group-port)]
-    (.setSoTimeout sock 2000)
-;    (dotimes [i 1]
-      (println "Send msg")
-      (.send sock (bonjure.core/create-msg group-ip group-port))
-      ;(Thread/sleep 1000)
-;      )
+    (.setSoTimeout sock 1000)
+    ;(start-listen sock got-pkt)
+    (println "Send msg")
+    (.send sock (bonjure.core/create-msg group-ip group-port))
+    ;(Thread/sleep 1000)
+
       (try
        (.joinGroup sock group-ip)
        (got-pkt (listen-once sock))
        (catch SocketTimeoutException e (println "Timeout " e)))
-;    (start-listen sock got-pkt)
+    
     ))
 
 (defn -main

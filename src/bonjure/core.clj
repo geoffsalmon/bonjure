@@ -86,45 +86,34 @@
     )
   )
 
-                                        ;(defn foo [] (case 1 1 (recur)))
-
-(def *label-cache*)
+; holds a thread-local binding of the packet currently being processed
+(def *curr-packet-body*)
+(def *curr-packet-start*)
 
 (defn read-labels
   ([buff] (read-labels buff []))
   ([buff labels]
      (let [num (take-ubyte buff)]
-       (println "read label num" (hex-byte num))
+       ;(println "read label num" (hex-byte num))
        
        (if (zero? num)
         (do
-          (println "Read labels" labels)
+          ;(println "Read labels" labels)
           labels)
 
         (condp = (bit-and 3 (bit-shift-right num 6))
-          0 ; is start of new label
-          
-          (do (println "start of new label" num)
-              (let [label (read-label buff num)]
-                (println "Got label" label)
-                (swap! *label-cache* assoc (.position buff) label)
-                (recur buff (conj labels label))))
+          0                             ; is start of new label
+          (let [label (read-label buff num)]
+            ;(println "Got label" label)
+            (recur buff (conj labels label)))
               
-          3 ; is a pointer
-          (do
-            (println "found pointer")
-            (let [index (bit-or (bit-shift-left (bit-and 0x3F num) 8) (take-ubyte buff))
-                  ;dupbuff (.position (.duplicate buff) index)
-                  ]
-              (do
-                (println "Is pointer to " labels " index:" index buff)
-                                        ;(recur dupbuff labels)
-                (conj labels "POINTER")
-                )))
+          3                             ; is a pointer
+          (let [index (bit-or (bit-shift-left (bit-and 0x3F num) 8) (take-ubyte buff))
+                dupbuff (.position (.duplicate *curr-packet-body*) (- index *curr-packet-start*))]
+            (recur dupbuff labels))
           
-          2 (println "Unsupported label byte" num)
-          1 (println "Unsupported label byte" num)
-          
+          2 (do (println "Unsupported label byte" num) labels)
+          1 (do (println "Unsupported label byte" num) labels)
           )
         )
        )
@@ -180,7 +169,8 @@
 
 (defn process-pkt [buff]
 
-  (binding [*label-cache* (atom {})]
+  (binding [*curr-packet-body* buff
+            *curr-packet-start* (.position buff)]
       (let [pinfo (zipmap
                    [:id :flags :qdcount :ancount :nscount :arcount]
                    (unpack buff "SSSSSS"))]
@@ -189,7 +179,6 @@
             (assoc :flags (decode-flags (:flags pinfo)))
             ((partial process-pkt-body buff)))
         )
-      (println "label-cache" @*label-cache*)
       )
   )
 
