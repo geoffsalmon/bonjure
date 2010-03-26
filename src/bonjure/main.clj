@@ -2,6 +2,8 @@
   (:import (java.net MulticastSocket InetAddress DatagramPacket SocketTimeoutException))
   (:import (java.nio ByteBuffer ByteOrder))
   (:use [bonjure bytebuffer])
+  (:use [clojure.contrib.seq :only [flatten]])
+  (:use [clojure.contrib.string :only [join]])
   (:require [bonjure.core :as core]) 
   (:gen-class)
   )
@@ -28,7 +30,7 @@
 
 (defn listen-many [sock event-fn]
   (try
-   (loop [] (event-fn (listen-once sock)) (recur))
+   (loop [] (event-fn sock (listen-once sock)) (recur))
    (catch SocketTimeoutException e (println "Timeout " e)))
   )
 
@@ -43,11 +45,29 @@
                        (println "Running in thread") (listen-many sock event-fn)))))
   )
 
-(defn got-pkt [pkt]
+(defn create-msg [ip port data]
+  (DatagramPacket. (.array data) (.position data) (.remaining data) ip port)
+  )
+
+(defn got-pkt [sock pkt]
   (println "received packet of size" (.getLength pkt))
-  (let [pkt (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt)))]
-    (println "pkt:" pkt)
-    (println "an:" (:an pkt))
+  (let [pkt (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt)))
+        rrs (filter (comp not nil?) (flatten [(:an pkt) (:ns pkt) (:ar pkt)]))
+        ]
+    ;(println "pkt:" pkt)
+    ;(println "rrs:" rrs)
+    (doseq [rr rrs]
+      (println (get (get core/rr-info (:type rr)) :name "?") (:name rr) (:rd rr))
+
+      ;(.send sock (create-msg group-ip group-port (bonjure.core/create-query-msg 33 (:rd rr))))
+      )
+
+    
+    
+;    (doseq [rr (filter (comp not nil?) (flatten (:an pkt) (:ns pkt) (:ar pkt)))])
+
+    
+    ;(println "an:" (:an pkt))
     )
   ) 
 
@@ -56,7 +76,11 @@
     ;(.setLoopbackMode sock true)
     (.setSoTimeout sock 1000)
     (println "Send msg")
-    (.send sock (bonjure.core/create-msg group-ip group-port))
+                                        ;(.send sock (bonjure.core/create-msg group-ip group-port))
+
+;    (.send sock (create-msg group-ip group-port (bonjure.core/create-query-msg 33 ["_http" "_tcp" "local"])))
+
+    (.send sock (create-msg group-ip group-port (bonjure.core/create-query-msg 33 ["_http" "_tcp"  "local"])))
     
     (.joinGroup sock group-ip)
     (listen-many sock got-pkt)
