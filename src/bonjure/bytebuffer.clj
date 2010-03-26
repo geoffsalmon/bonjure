@@ -1,13 +1,63 @@
 (ns bonjure.bytebuffer
+  "Library for simplifying working with java.nio.ByteBuffer
+objects.
+
+The aim here is not to provide a clojure function wrapping every Java
+method. Instead the functions here are added to be more convenient or
+more clojurey.
+
+Notable additions are
+
+1. Handles signed and unsigned values pleasently. Usually reading or
+writing unsigned fields with ByteBuffers is a pain because Java
+doesn't have unsigned primitives. The unsigned take-* functions here
+actually return a type that is one step larger than the requested
+type, ex. take-ushort returns an int, and take-uint returns a
+bigint. The larger types are big enough to handle the entire unsigned
+range of the smaller type. Similarly, although there are not separate
+signed and unsigned version, the put-* functions will accept any
+number type and truncate it so positive and negative numbers can be
+stored.
+
+NOTE: Add an overflow check to avoid overflows in put-* functions?
+
+2. Provides pack and unpack functions inspired by Python's struct
+module. Use simple format strings, similar to printf's, to define how
+fields are layed out in the buffer.
+
+Usage:
+
+(pack buff \"isbb\" 123 43 23 3) ; puts an int, a short and two bytes into buff
+(.flip buff) ; assuming nothing else was written to the buffer
+(unpack buff \"isbb\") => (123 43 24 3)
+
+3. Provides pack-bits and unpack-bits functions for working with bit
+fields within numbers. These are useful for pulling apart flag fields
+in packets.
+"
+  
+  (:use [clojure.contrib.def :only [defvar-]])
   (:import (java.nio ByteBuffer ByteOrder))
   )
 
-(def *byte-buffer* nil)
+(defn byte-buffer
+  "Creates a ByteBuffer of capacity bytes"
+  [capacity]
+  (ByteBuffer/allocate capacity))
 
-(defn byte-buffer [n]
-  (ByteBuffer/allocate n))
+(defvar- *byte-buffer* nil "The current buffer. Use with-buffer to
+bind this.")
 
 (defmacro with-buffer
+  "Sets the buffer currently being used by the put-* and take-*
+functions.
+
+I'm considering removing both this and the *byte-buffer* var and
+simplifying all of the put-* and take-* fns. Originally this was added
+avoid the redundancy of specifying the buffer multiple times in a let
+when taking many fields, but now the same thing can be down even
+easier with the pack function. Still undecided though.
+"
   [buffer & body]
   `(binding [*byte-buffer* ~buffer]
      ~@body))
@@ -16,7 +66,7 @@
   ([val]
      (put-byte *byte-buffer* val))
   ([buff val]
-     ;(println "put-byte" val (class val) (.byteValue))
+                                        ;(println "put-byte" val (class val) (.byteValue)) ; ;
      (.put buff (.byteValue val)))
   )
 
@@ -114,7 +164,6 @@ consumes the bytes in the given buffer."
   ) 
 
 (defn- pack-one [buff fmt val]
-;  (println "packone" fmt val)
   (case fmt
         \b (put-byte buff val)
         \s (put-short buff val)
@@ -124,19 +173,29 @@ consumes the bytes in the given buffer."
         ))
 
 (defn pack
+  "Puts one or more numbers for vals into buff using field sizes
+  determined by the characters in the fmt sequence. Valid characters are
+b - byte
+s - short
+i - int
+l - long
+
+The number of characters in fmt must match the number of numbers in vals.
+
+Usage: (pack buff \"isbb\" 123 43 23 3) ; puts an int, a short and two bytes into buff
+
+Returns buff.
+"
   [buff fmt & vals]
-                                        ;  (println "pack" fmt vals)
   (when-not (= (count fmt) (count vals))
     (throw (IllegalArgumentException. "pack error. Number of format symbols must match number of values.")))
 
   (doseq [[f val] (partition 2 (interleave fmt vals))]
     (pack-one buff f val))
-;  (doall (map #(pack-one buff %1 %2) fmt vals))
   buff
   )
 
 (defn- unpack-one [buff fmt]
-;  (println "unpack-one" fmt)
   (case fmt
         \b (take-byte buff)
         \B (take-ubyte buff)
@@ -150,6 +209,19 @@ consumes the bytes in the given buffer."
         ))
 
 (defn unpack
+  "Returns a sequence of one or more numbers taken from buff. The
+  number and type of numbers taken is determined by fmt which is a
+  sequence of characters. Valid characters in fmt:
+
+b - byte
+B - unsigned byte
+s - short
+S - unsigned short
+i - int
+I - unsigned int
+l - long
+L - unsigned long
+"  
   [buff fmt]
   (doall (map (partial unpack-one buff) fmt))
   )
@@ -167,7 +239,7 @@ consumes the bytes in the given buffer."
 
 fields => bit-length value
 
-The value can be a boolean. true is stored as 1, false as 0
+The value can also be a boolean. true is stored as 1, false as 0
 "
   ([] 0)
   ([& fields]
@@ -205,9 +277,13 @@ The value can be a boolean. true is stored as 1, false as 0
 
 (defn unpack-bits
   "Pulls apart a number into a list of fields of various bit lengths.
-Pass a non-positive bit length to skip that many bits without adding a corresponding value to the result list.
-Passing a field length of 1 will add either a 0 or a 1 to the resulting sequence. To get a boolean value instead, pass \b.
+Pass a non-positive bit length to skip that many bits without adding a
+corresponding value to the result list.
+
+Passing a field length of 1 will add either a 0 or a 1 to the
+resulting sequence. To get a boolean value instead, pass \b.
 "
+  
   [x & bit-lengths]
   (loop [val x
          results '()
