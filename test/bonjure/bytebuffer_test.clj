@@ -152,8 +152,11 @@ filled callin the Java put* methods"
 (deftest test-bit-pack
   (is (= 0x120428 (pack-bits 4 1 4 2 4 0 4 4 8 0x28)))
 
+
+  (is (= 2r11010001 (pack-bits 2 3 2 true 3 false 1 true)) "use booleans for values 0 and 1")
+
   (is (thrown? Exception
-               (pack-bits 4 1 4 -5 4)) "field without value")
+               (pack-bits 4 1 4 5 4)) "field without value")
   
   (is (thrown? Exception
                (pack-bits 4 1 4 -5 4 2)) "negative values")
@@ -172,9 +175,10 @@ filled callin the Java put* methods"
   (is (= [0 0 0x12 0x34 0x5] (unpack-bits 0x12345 3 9 8 8 4)))
   
   (is (= [0x12 0x5] (unpack-bits 0x12345 8 -8 4)) "Skip bits")
+
+  (is (= [2r1010 true false 2r01] (unpack-bits 2r10101001 4 \b \b 2)) "bits as booleans")
   
   (is (= [0x12 0x34 0x5] (unpack-bits 0x12345 0 0 8 8 0 4)) "Weird 0 bit length. Should this be an error instead?")
-
   )
 
 

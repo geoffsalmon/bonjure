@@ -62,13 +62,22 @@
     pkt))
 
 
+(defn encode-flags [{:keys [qr opcode aa tc rd ra rcode]}]
+  (pack-bits 1 qr
+             4 opcode
+             1 aa 1 tc 1 rd 1 ra
+             3 0
+             4 rcode)
+  )
+
 (defn decode-flags [flags]
-  (-> {}
-      (assoc :qr (bit-test flags 15))
-      (assoc :opcode (bit-shift-right (bit-and flags 0x7800) 11))
-      (merge (zipmap [:aa :tc :rd :ra] (map (partial bit-test flags) (reverse (range 7 11)))))
-      (assoc :rcode (bit-and flags 0xF))
-      )
+  (let [f
+        (zipmap [:qr :opcode :aa :tc :rd :ra :rcode]
+                (unpack-bits flags \b 4 \b \b \b \b -3 4))]
+
+    (println "Reencode equal?" (= flags (encode-flags f)))
+
+    )
   )
 
 (defn hex-byte [x]
@@ -133,7 +142,7 @@
 
 
 (defn process-rrs [buff n]
-  (println "process-rrs" n)
+  ;(println "process-rrs" n)
   (doall
    (take n
          (repeatedly
@@ -144,27 +153,24 @@
                  rdlen (take-ushort buff)
                  rdbuf (slice-off buff rdlen)
                  ]
-             (println "rdlen: " rdlen)
-             ;(doseq [x (take rdlen (repeatedly (fn [] (take-ubyte rdbuf))))] (print (hex-byte x) ""))
-             ;(println "")
+                                        ;(println "rdlen: " rdlen)
+                                        ;(doseq [x (take rdlen (repeatedly (fn [] (take-ubyte rdbuf))))] (print (hex-byte x) ""))
+                                        ;(println "")
              (case (:type hdr)
-                   12           ; PTR
+                   12                   ; PTR
                    (assoc hdr :rd (read-labels rdbuf))
                    
-                   hdr          ; default
-                   ))
-                  )
-               )))
+                   hdr                  ; default
+                   )
+             )
+               ))))
 
 (defn process-pkt-body [buff pinfo]
-  ;(if (:qr (:flags pinfo))
-  ;  pinfo
-    (-> pinfo
-        (assoc :qd (process-question buff (:qdcount pinfo)))
-        (assoc :an (process-rrs buff (:ancount pinfo)))
-        (assoc :ns (process-rrs buff (:nscount pinfo)))
-        (assoc :ar (process-rrs buff (:arcount pinfo))))
-    ;)
+  (-> pinfo
+      (assoc :qd (process-question buff (:qdcount pinfo)))
+      (assoc :an (process-rrs buff (:ancount pinfo)))
+      (assoc :ns (process-rrs buff (:nscount pinfo)))
+      (assoc :ar (process-rrs buff (:arcount pinfo))))
   )
 
 (defn process-pkt [buff]

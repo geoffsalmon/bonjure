@@ -45,7 +45,10 @@
 
 (defn got-pkt [pkt]
   (println "received packet of size" (.getLength pkt))
-  (println "pkt:" (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt))))
+  (let [pkt (bonjure.core/process-pkt (ByteBuffer/wrap (.getData pkt) (.getOffset pkt) (.getLength pkt)))]
+    (println "pkt:" pkt)
+    (println "an:" (:an pkt))
+    )
   ) 
 
 (defn go []

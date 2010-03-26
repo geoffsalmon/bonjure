@@ -155,10 +155,19 @@ consumes the bytes in the given buffer."
   )
 
 
+(defn- bit-val [x]
+  (if (instance? Boolean x)
+    (if x 1 0)
+    x
+    )
+  )
+
 (defn pack-bits
   "Packs multiple numbers into a single number using explicit bit lengths.
 
 fields => bit-length value
+
+The value can be a boolean. true is stored as 1, false as 0
 "
   ([] 0)
   ([& fields]
@@ -166,35 +175,39 @@ fields => bit-length value
        (throw (IllegalArgumentException. (str "pack-bits Last field does not have a value.")))
        )
 
-     (reduce (fn [acc [num-bits val]]
-               (when-not (pos? num-bits)
-                 (throw (IllegalArgumentException.
-                         (str "pack-bits: Invalid bit length " num-bits ". Must be positive."))))
-
-               (when (neg? val)
-                 (throw (IllegalArgumentException.
-                         (str "pack-bits: Invalid value " val ". Must be non-negative."))))
+     (reduce (fn [acc [num-bits val-in]]
+               (let [val (bit-val val-in)]
+                 (when-not (pos? num-bits)
+                   (throw (IllegalArgumentException.
+                           (str "pack-bits: Invalid bit length " num-bits ". Must be positive."))))
                
-               ; ensure specified bit length was big enough
-               (when-not (= val
-                          (bit-and val (dec (bit-shift-left 1 num-bits)))
+                 (when (neg? val)
+                   (throw (IllegalArgumentException.
+                           (str "pack-bits: Invalid value " val ". Must be non-negative."))))
+               
+                 ; ensure specified bit length was big enough
+                 (when-not (= val
+                              (bit-and val (dec (bit-shift-left 1 num-bits)))
                           
-                          )
-                 (throw (IllegalArgumentException.
-                         (str "pack-bits: Invalid value " val ". Must fit in " num-bits " bits as specified.")))
-                 )
-               
-               (-> acc
-                   (bit-shift-left num-bits)
-                   (bit-or val)
+                              )
+                   (throw (IllegalArgumentException.
+                           (str "pack-bits: Invalid value " val ". Must fit in " num-bits " bits as specified.")))
                    )
+               
+                 (-> acc
+                     (bit-shift-left num-bits)
+                     (bit-or val)
+                     ))
                )
              0 (partition 2 fields))
      )
   )
 
 (defn unpack-bits
-  "Pulls apart a number into a list of fields of various bit lengths. Pass a non-positive bit length to skip that many bits without adding a corresponding value to the result list."
+  "Pulls apart a number into a list of fields of various bit lengths.
+Pass a non-positive bit length to skip that many bits without adding a corresponding value to the result list.
+Passing a field length of 1 will add either a 0 or a 1 to the resulting sequence. To get a boolean value instead, pass \b.
+"
   [x & bit-lengths]
   (loop [val x
          results '()
@@ -208,19 +221,26 @@ fields => bit-length value
       results
 
       (let [bits (first rbit-lens)]
-        (if (pos? bits)
-          (recur (bit-shift-right val bits)
-                 (cons
-                  (bit-and val (dec (bit-shift-left 1 bits)))
-                  results)
-                 (rest rbit-lens)
-                 )
-          ; skip bits
-          (recur (bit-shift-right val (- bits))
-                 results
-                 (rest rbit-lens)
-                 )
-          )
+        (cond
+         (= \b bits) ; grab single bit as boolean
+         (recur (bit-shift-right val 1)
+                (cons (= 1 (bit-and val 1)) results)
+                (rest rbit-lens)
+                )
+         
+         (pos? bits)
+         (recur (bit-shift-right val bits)
+                (cons
+                 (bit-and val (dec (bit-shift-left 1 bits)))
+                 results)
+                (rest rbit-lens)
+                )
+         :else ; skip bits
+         (recur (bit-shift-right val (- bits))
+                results
+                (rest rbit-lens)
+                )
+         )
         )
       )
     )
