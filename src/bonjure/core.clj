@@ -12,6 +12,7 @@
 ; DNS http://www.faqs.org/rfcs/rfc1035.html
 ; SRV RR ftp://ftp.rfc-editor.org/in-notes/rfc2782.txt
 ; DNS-SD http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt
+; mDNS http://files.multicastdns.org/draft-cheshire-dnsext-multicastdns.txt
 
 
 (def utf8-charset (Charset/forName "UTF-8"))
